@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Information</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        p {
+            font-size: 16px;
+            margin: 5px 0;
+        }
+        #locationPrompt {
+            display: none;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #locationPrompt button {
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <p id="locationStatus">Location is OFF</p>
+    <p id="locationCoordinates">Latitude and Longitude: Not Available</p>
+    <p id="locationName">Location Name: Not Available</p>
+    <p id="ipAddress">Fetching IP address...</p>
+    <p id="batteryStatus">Battery status: Fetching...</p>
+    <p id="osInfo">Operating System: Detecting...</p>
+    <p id="browserInfo">Browser Information: Detecting...</p>
+    <p id="screenInfo">Screen Information: Fetching...</p>
+    <p id="networkInfo">Network Information: Fetching...</p>
+    <p id="languageInfo">Language: Detecting...</p>
+    <p id="timezoneInfo">Timezone: Detecting...</p>
+    <p id="deviceMemory">Device Memory: Fetching...</p>
+    <p id="devicePixelRatio">Device Pixel Ratio: Fetching...</p>
+    <p id="connectionType">Connection Type: Fetching...</p>
+    <p id="chargingTime">Charging Time: Fetching...</p>
+
+    <div id="locationPrompt">
+        <p>To provide a better experience, we need access to your location. Please enable location access in your browser settings.</p>
+        <button id="allowLocation">Allow Location</button>
+        <button id="denyLocation">Deny Location</button>
+    </div>
+
+    <script>
+const locationStatus = document.getElementById('locationStatus');
+const locationCoordinates = document.getElementById('locationCoordinates');
+const locationName = document.getElementById('locationName');
+const ipAddress = document.getElementById('ipAddress');
+const batteryStatus = document.getElementById('batteryStatus');
+const osInfo = document.getElementById('osInfo');
+const browserInfo = document.getElementById('browserInfo');
+const screenInfo = document.getElementById('screenInfo');
+const networkInfo = document.getElementById('networkInfo');
+const languageInfo = document.getElementById('languageInfo');
+const timezoneInfo = document.getElementById('timezoneInfo');
+const deviceMemory = document.getElementById('deviceMemory');
+const devicePixelRatio = document.getElementById('devicePixelRatio');
+const connectionType = document.getElementById('connectionType');
+const chargingTime = document.getElementById('chargingTime');
+const locationPrompt = document.getElementById('locationPrompt');
+const allowLocationButton = document.getElementById('allowLocation');
+const denyLocationButton = document.getElementById('denyLocation');
+let watchID = null;
+
+window.onload = () => {
+    // Check if geolocation is supported
+    if (navigator.geolocation) {
+        // Check if location access has been granted
+        navigator.permissions.query({ name: 'geolocation' }).then(permissionStatus => {
+            if (permissionStatus.state === 'granted') {
+                // Location access already granted
+                startTrackingLocation();
+            } else if (permissionStatus.state === 'prompt') {
+                // Prompt the user to enable location access
+                locationPrompt.style.display = 'block';
+
+                allowLocationButton.addEventListener('click', () => {
+                    locationPrompt.style.display = 'none';
+                    startTrackingLocation();
+                });
+
+                denyLocationButton.addEventListener('click', () => {
+                    locationPrompt.style.display = 'none';
+                    locationStatus.innerText = "Location access denied. Some features may not work properly.";
+                });
+            } else {
+                // Location access denied or not available
+                locationStatus.innerText = "Location access is blocked. Please enable location access in your browser settings.";
+            }
+        }).catch(error => {
+            console.error('Error checking geolocation permissions:', error);
+            locationStatus.innerText = "Unable to check location access permissions.";
+        });
+    } else {
+        locationStatus.innerText = "Geolocation is not supported by this browser.";
+    }
+
+    // Fetch and display IP address
+    fetch('https://api.ipify.org?format=json')
+        .then(response => response.json())
+        .then(data => {
+            ipAddress.innerText = `Your IP Address: ${data.ip}`;
+        })
+        .catch(error => {
+            ipAddress.innerText = "Unable to fetch IP address.";
+        });
+
+    // Fetch and display battery status
+    if (navigator.getBattery) {
+        navigator.getBattery().then(battery => {
+            updateBatteryStatus(battery);
+
+            battery.addEventListener('chargingchange', () => updateBatteryStatus(battery));
+            battery.addEventListener('levelchange', () => updateBatteryStatus(battery));
+            battery.addEventListener('chargingtimechange', () => updateBatteryStatus(battery));
+        });
+    } else {
+        batteryStatus.innerText = "Battery status not supported.";
+    }
+
+    // Fetch and display device information
+    displayDeviceInfo();
+};
+
+window.onunload = () => {
+    // Automatically turn off location when the user exits the page
+    if (watchID !== null) {
+        navigator.geolocation.clearWatch(watchID);
+        locationStatus.innerText = "Location is OFF";
+    }
+};
+
+function startTrackingLocation() {
+    watchID = navigator.geolocation.watchPosition(
+        showPosition,
+        showError,
+        {
+            maximumAge: 30000,
+            timeout: 10000,
+            enableHighAccuracy: true
+        }
+    );
+    locationStatus.innerText = "Location is ON";
+}
+
+function updateBatteryStatus(battery) {
+    const chargingStatus = battery.charging ? "Charging" : "Not Charging";
+    const level = Math.round(battery.level * 100);
+    const chargingTime = battery.chargingTime !== Infinity ? Math.round(battery.chargingTime / 60) + ' min' : 'Unknown';
+    batteryStatus.innerText = `Battery status: ${chargingStatus}, Level: ${level}%, Charging Time: ${chargingTime}`;
+}
+
+function showPosition(position) {
+    const latitude = position.coords.latitude;
+    const longitude = position.coords.longitude;
+    locationCoordinates.innerText = `Latitude: ${latitude}, Longitude: ${longitude}`;
+    storeLocation(latitude, longitude);
+
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`)
+        .then(response => response.json())
+        .then(data => {
+            locationName.innerText = `Location Name: ${data.display_name}`;
+        })
+        .catch(error => {
+            locationName.innerText = "Unable to retrieve location name.";
+        });
+}
+
+function showError(error) {
+    console.error(`Error Code: ${error.code} - ${error.message}`);  // Log error details for debugging
+    if (error.code === error.TIMEOUT) {
+        // Retry fetching location if there was a timeout
+        navigator.geolocation.getCurrentPosition(showPosition, showError, {timeout: 10000});
+    } else {
+        handleLocationPermissionError(error);
+    }
+}
+
+function handleLocationPermissionError(error) {
+    switch (error.code) {
+        case error.PERMISSION_DENIED:
+            locationStatus.innerText = "User denied the request for Geolocation. Please enable location access in your browser settings.";
+            break;
+        case error.POSITION_UNAVAILABLE:
+            locationStatus.innerText = "Location information is unavailable.";
+            break;
+        case error.TIMEOUT:
+            locationStatus.innerText = "The request to get user location timed out.";
+            break;
+        case error.UNKNOWN_ERROR:
+            locationStatus.innerText = "An unknown error occurred.";
+            break;
+    }
+}
+
+function storeLocation(latitude, longitude) {
+    const locationHistory = JSON.parse(localStorage.getItem('locationHistory')) || [];
+    locationHistory.push({ latitude, longitude, timestamp: new Date() });
+    localStorage.setItem('locationHistory', JSON.stringify(locationHistory));
+}
+
+function displayDeviceInfo() {
+    // Display OS and Browser Information
+    const userAgent = navigator.userAgent;
+    const platform = navigator.platform;
+    osInfo.innerText = `Operating System: ${platform}`;
+    browserInfo.innerText = `Browser Information: ${userAgent}`;
+
+    // Display Screen Information
+    const screenWidth = screen.width;
+    const screenHeight = screen.height;
+    const availWidth = screen.availWidth;
+    const availHeight = screen.availHeight;
+    screenInfo.innerText = `Screen: ${screenWidth}x${screenHeight} (Available: ${availWidth}x${availHeight})`;
+
+    // Display Device Memory (if supported)
+    if ('deviceMemory' in navigator) {
+        deviceMemory.innerText = `Device Memory: ${navigator.deviceMemory}GB`;
+    } else {
+        deviceMemory.innerText = "Device Memory not supported.";
+    }
+
+    // Display Device Pixel Ratio
+    devicePixelRatio.innerText = `Device Pixel Ratio: ${window.devicePixelRatio}`;
+
+    // Display Connection Type (if supported)
+    if (navigator.connection) {
+        const connection = navigator.connection;
+        connectionType.innerText = `Connection Type: ${connection.effectiveType}`;
+    } else {
+        connectionType.innerText = "Connection Type not supported.";
+    }
+
+    // Display Network Information (if supported)
+    if (navigator.connection) {
+        const connection = navigator.connection;
+        networkInfo.innerText = `Connection: ${connection.effectiveType}, Downlink: ${connection.downlink}Mbps, RTT: ${connection.rtt}ms`;
+    } else {
+        networkInfo.innerText = "Network Information not supported.";
+    }
+
+    // Display Language and Timezone
+    const language = navigator.language;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    languageInfo.innerText = `Language: ${language}`;
+    timezoneInfo.innerText = `Timezone: ${timezone}`;
+}
+
+
+    </script>
+</body>
+</html>
